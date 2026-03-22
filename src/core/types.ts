@@ -58,6 +58,25 @@ export interface ParagraphAnalysis {
 	wordLength: WordLengthResult;
 }
 
+export interface FlowScore {
+	/** Composite score (0–1). Derived from Hurst exponent and spectrum width. */
+	score: number;
+	/** DFA scaling exponent. 0.5=noise, ~0.75=structured, 1.0=1/f, 1.5=Brownian. */
+	alpha: number;
+	/** R² of the log-log scaling fit. */
+	fitR2: number;
+	/** Multifractal spectrum width. 0=monofractal, higher=richer variation. */
+	spectrumWidth: number;
+}
+
+export interface DocumentFlowScores {
+	structural: FlowScore;
+	sentenceLength: FlowScore;
+	wordLength: FlowScore;
+	/** Mean of the three component scores. */
+	composite: number;
+}
+
 export interface DocumentAnalysis {
 	paragraphs: ParagraphAnalysis[];
 	totalSentences: number;
@@ -65,6 +84,7 @@ export interface DocumentAnalysis {
 	overallStructural: StructuralFlowResult;
 	overallSentenceLength: SentenceLengthResult;
 	overallWordLength: WordLengthResult;
+	flow: DocumentFlowScores;
 }
 
 export interface QuillSettings {

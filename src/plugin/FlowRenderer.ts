@@ -1,4 +1,4 @@
-import { SentenceType, ParagraphAnalysis, QuillSettings } from "../core/types";
+import { SentenceType, ParagraphAnalysis, QuillSettings, FlowScore } from "../core/types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const BAR_HEIGHT = 14;
@@ -136,5 +136,45 @@ export function renderWordLengthBar(
 		x += w;
 	}
 
+	return svg;
+}
+
+const SCORE_BAR_HEIGHT = 10;
+const SCORE_TRACK_COLOR = "rgba(128,128,128,0.15)";
+
+export function renderScoreBar(
+	score: number,
+	width: number,
+	color: string,
+): SVGSVGElement {
+	const svg = svgEl("svg", {
+		width,
+		height: SCORE_BAR_HEIGHT,
+		viewBox: `0 0 ${width} ${SCORE_BAR_HEIGHT}`,
+	});
+
+	const id = nextClipId("qsc");
+	const defs = svgEl("defs", {});
+	const cp = svgEl("clipPath", { id });
+	cp.appendChild(svgEl("rect", {
+		x: 0, y: 0, width, height: SCORE_BAR_HEIGHT, rx: 2, ry: 2,
+	}));
+	defs.appendChild(cp);
+	svg.appendChild(defs);
+
+	const group = svgEl("g", { "clip-path": `url(#${id})` });
+
+	group.appendChild(svgEl("rect", {
+		x: 0, y: 0, width, height: SCORE_BAR_HEIGHT, fill: SCORE_TRACK_COLOR,
+	}));
+
+	const fillWidth = Math.max(0, Math.min(score, 1)) * width;
+	if (fillWidth > 0) {
+		group.appendChild(svgEl("rect", {
+			x: 0, y: 0, width: fillWidth, height: SCORE_BAR_HEIGHT, fill: color,
+		}));
+	}
+
+	svg.appendChild(group);
 	return svg;
 }

@@ -1,6 +1,6 @@
 import { ItemView, WorkspaceLeaf, MarkdownView } from "obsidian";
-import { DocumentAnalysis, SentenceType, QuillSettings } from "../core/types";
-import { renderStructuralBar, renderSentenceLengthBar, renderWordLengthBar } from "./FlowRenderer";
+import { DocumentAnalysis, SentenceType, QuillSettings, DocumentFlowScores } from "../core/types";
+import { renderStructuralBar, renderSentenceLengthBar, renderWordLengthBar, renderScoreBar } from "./FlowRenderer";
 
 export const QUILL_VIEW_TYPE = "quill-flow-view";
 const BAR_WIDTH = 140;
@@ -57,6 +57,7 @@ export class FlowSidebarView extends ItemView {
 		}
 
 		this.renderLegend(container);
+		this.renderFlowScores(container, this.analysis.flow);
 		this.renderSummary(container);
 
 		for (let i = 0; i < this.analysis.paragraphs.length; i++) {
@@ -81,6 +82,45 @@ export class FlowSidebarView extends ItemView {
 			const swatch = item.createDiv({ cls: "quill-legend-swatch" });
 			swatch.style.backgroundColor = color;
 			item.createSpan({ text: label });
+		}
+	}
+
+	private renderFlowScores(container: HTMLElement, flow: DocumentFlowScores): void {
+		const section = container.createDiv({ cls: "quill-flow-scores" });
+
+		const COMPOSITE_COLOR = "#14b8a6";
+		const COMPONENT_COLOR = "#0d9488";
+		const SCORE_BAR_WIDTH = 100;
+
+		section.createDiv({ cls: "quill-flow-heading", text: "Flow" });
+
+		const compositeRow = section.createDiv({ cls: "quill-flow-row quill-flow-composite" });
+		compositeRow.createDiv({ cls: "quill-flow-label", text: "Overall" });
+		const compositeBar = compositeRow.createDiv({ cls: "quill-flow-bar" });
+		compositeBar.appendChild(renderScoreBar(flow.composite, SCORE_BAR_WIDTH, COMPOSITE_COLOR));
+		compositeRow.createDiv({
+			cls: "quill-flow-value",
+			text: flow.composite.toFixed(2),
+		});
+
+		const components: [string, number, number, number, number][] = [
+			["Structure", flow.structural.score, flow.structural.alpha, flow.structural.spectrumWidth, flow.structural.fitR2],
+			["Sent. len", flow.sentenceLength.score, flow.sentenceLength.alpha, flow.sentenceLength.spectrumWidth, flow.sentenceLength.fitR2],
+			["Word len", flow.wordLength.score, flow.wordLength.alpha, flow.wordLength.spectrumWidth, flow.wordLength.fitR2],
+		];
+
+		for (const [label, score, alpha, specWidth, fitR2] of components) {
+			const row = section.createDiv({ cls: "quill-flow-row" });
+			row.createDiv({ cls: "quill-flow-label", text: label });
+			const bar = row.createDiv({ cls: "quill-flow-bar" });
+			bar.appendChild(renderScoreBar(score, SCORE_BAR_WIDTH, COMPONENT_COLOR));
+			row.createDiv({ cls: "quill-flow-value", text: score.toFixed(2) });
+
+			row.setAttribute(
+				"aria-label",
+				`\u03b1=${alpha} (fit R\u00b2=${fitR2}), spectrum width=${specWidth}`,
+			);
+			row.addClass("quill-flow-has-tooltip");
 		}
 	}
 

@@ -2,6 +2,8 @@ import {
 	Paragraph,
 	ParagraphAnalysis,
 	DocumentAnalysis,
+	DocumentFlowScores,
+	FlowScore,
 	QuillSettings,
 	SentenceType,
 	StructuralFlowResult,
@@ -12,6 +14,7 @@ import { classifyAllSentences, computeStructuralFlow } from "./classifiers/sente
 import { analyzeSentenceLength } from "./classifiers/sentenceLength";
 import { analyzeWordLength } from "./classifiers/wordLength";
 import { tokenize } from "./tokenizer";
+import { computeDfa, DfaResult } from "./dfa";
 
 function analyzeParagraph(paragraph: Paragraph, settings: QuillSettings): ParagraphAnalysis {
 	classifyAllSentences(paragraph.sentences);
@@ -106,6 +109,47 @@ function mergeWordLength(analyses: ParagraphAnalysis[]): WordLengthResult {
 	};
 }
 
+const COMPLEXITY_MAP: Record<SentenceType, number> = {
+	[SentenceType.Fragment]: 0,
+	[SentenceType.Simple]: 1,
+	[SentenceType.Compound]: 2,
+	[SentenceType.Complex]: 3,
+	[SentenceType.CompoundComplex]: 4,
+};
+
+function computeFlowScores(analyses: ParagraphAnalysis[]): DocumentFlowScores {
+	const allSentences = analyses.flatMap((a) => a.paragraph.sentences);
+
+	const structuralSeries = allSentences.map((s) => COMPLEXITY_MAP[s.type]);
+	const sentLengthSeries = allSentences.map((s) => s.wordCount);
+	const wordLengthSeries = allSentences.map((s) => {
+		if (s.words.length === 0) return 0;
+		return s.words.reduce((sum, w) => sum + w.charLength, 0) / s.words.length;
+	});
+
+	const structDfa = computeDfa(structuralSeries);
+	const sentDfa = computeDfa(sentLengthSeries);
+	const wordDfa = computeDfa(wordLengthSeries);
+
+	const toScore = (dfa: DfaResult): FlowScore => ({
+		score: dfa.score,
+		alpha: dfa.alpha,
+		fitR2: dfa.fitR2,
+		spectrumWidth: dfa.spectrumWidth,
+	});
+
+	const composite = Math.round(
+		((structDfa.score + sentDfa.score + wordDfa.score) / 3) * 1000,
+	) / 1000;
+
+	return {
+		structural: toScore(structDfa),
+		sentenceLength: toScore(sentDfa),
+		wordLength: toScore(wordDfa),
+		composite,
+	};
+}
+
 export function analyzeDocument(markdownText: string, settings: QuillSettings): DocumentAnalysis {
 	const paragraphs = tokenize(markdownText);
 	const analyses = paragraphs.map((p) => analyzeParagraph(p, settings));
@@ -123,5 +167,6 @@ export function analyzeDocument(markdownText: string, settings: QuillSettings): 
 		overallStructural: mergeStructural(analyses),
 		overallSentenceLength: mergeSentenceLength(analyses, settings.longSentenceThreshold),
 		overallWordLength: mergeWordLength(analyses),
+		flow: computeFlowScores(analyses),
 	};
 }

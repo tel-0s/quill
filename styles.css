@@ -82,6 +82,66 @@
 	flex-shrink: 0;
 }
 
+.quill-flow-scores {
+	padding: 6px 0 10px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	margin-bottom: 10px;
+}
+
+.quill-flow-heading {
+	font-size: 0.75em;
+	font-weight: 600;
+	color: var(--text-normal);
+	margin-bottom: 6px;
+}
+
+.quill-flow-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 3px;
+}
+
+.quill-flow-composite {
+	margin-bottom: 6px;
+}
+
+.quill-flow-label {
+	font-size: 0.7em;
+	color: var(--text-faint);
+	width: 60px;
+	flex-shrink: 0;
+	text-align: right;
+}
+
+.quill-flow-bar {
+	flex: 1;
+	min-width: 0;
+}
+
+.quill-flow-value {
+	font-size: 0.75em;
+	color: var(--text-muted);
+	width: 32px;
+	flex-shrink: 0;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.quill-flow-composite .quill-flow-label {
+	font-weight: 600;
+	color: var(--text-muted);
+}
+
+.quill-flow-composite .quill-flow-value {
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.quill-flow-has-tooltip {
+	position: relative;
+}
+
 .quill-empty-state {
 	display: flex;
 	align-items: center;
