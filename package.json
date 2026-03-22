@@ -1,0 +1,30 @@
+{
+	"name": "quill",
+	"version": "0.1.0",
+	"description": "Writing flow analysis for Obsidian — structural, sentence length, and word length metrics.",
+	"main": "main.js",
+	"type": "module",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"lint": "eslint ."
+	},
+	"keywords": [
+		"obsidian",
+		"writing",
+		"flow",
+		"nlp",
+		"analysis"
+	],
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^16.11.6",
+		"esbuild": "0.25.5",
+		"tslib": "2.4.0",
+		"typescript": "^5.8.3"
+	},
+	"dependencies": {
+		"compromise": "^14.14.3",
+		"obsidian": "latest"
+	}
+}

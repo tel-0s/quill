@@ -1,0 +1,9 @@
+{
+	"id": "quill",
+	"name": "Quill",
+	"version": "0.1.0",
+	"minAppVersion": "1.5.0",
+	"description": "Writing flow analysis — structural, sentence length, and word length metrics for your prose.",
+	"author": "Quill",
+	"isDesktopOnly": false
+}
