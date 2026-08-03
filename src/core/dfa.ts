@@ -156,16 +156,45 @@ function logLogRegression(
 }
 
 /**
- * Map the DFA exponent α to a 0–1 flow score.
- * Peaks around 0.75 (structured variation with long-range memory).
- * Asymmetric Gaussian: more forgiving toward 1/f (α≈1.0) than toward
- * pure noise (α≈0.5), since 1/f-like prose still reads well.
+ * Map the DFA exponent α to a 0–1 score.
+ * Peaks at 0.75.  Tighter sigmas than before: below 0.6 or above 1.0
+ * the score drops meaningfully.  Asymmetric — slightly more forgiving
+ * toward 1/f (α≈1.0) than toward pure noise (α≈0.5).
  */
 function alphaToScore(alpha: number): number {
 	const target = 0.75;
 	const diff = alpha - target;
-	const sigma = diff > 0 ? 0.35 : 0.25;
+	const sigma = diff > 0 ? 0.22 : 0.16;
 	return Math.exp(-0.5 * (diff / sigma) ** 2);
+}
+
+/**
+ * Coefficient of variation → variation-sufficiency factor (0–1).
+ *
+ * DFA tells us the *structure* of variation, but not whether there's
+ * *enough*.  Monotonous text (all simple sentences, all ~20 words)
+ * can have a nice α if its tiny fluctuations correlate well.  This
+ * factor ensures the score reflects actual perceptible variation.
+ *
+ * Uses an exponential ramp: rises quickly from 0 to 1 as CV grows.
+ *   cv ≈ 0   → 0     (no variation — no flow, period)
+ *   cv ≈ 0.15 → 0.63
+ *   cv ≈ 0.30 → 0.86
+ *   cv > 0.50 → ~1.0  (sufficient variation, no further bonus)
+ */
+function variationFactor(values: number[]): number {
+	const n = values.length;
+	if (n < 2) return 0;
+	const mean = values.reduce((a, b) => a + b, 0) / n;
+	if (Math.abs(mean) < 1e-12) {
+		const allZero = values.every((v) => Math.abs(v) < 1e-12);
+		if (allZero) return 0;
+	}
+	const variance = values.reduce((acc, v) => acc + (v - mean) ** 2, 0) / n;
+	const std = Math.sqrt(variance);
+	const denom = Math.max(Math.abs(mean), std, 1e-12);
+	const cv = std / denom;
+	return 1 - Math.exp(-cv / 0.15);
 }
 
 /**
@@ -202,9 +231,11 @@ export function computeDfa(values: number[]): DfaResult {
 	const hMin = Math.min(...hValues);
 	const spectrumWidth = Math.round(Math.max(0, hMax - hMin) * 1000) / 1000;
 
-	const alphaScore = alphaToScore(alpha);
+	const aScore = alphaToScore(alpha);
+	const vFactor = variationFactor(values);
+	const modulatedAlpha = aScore * (0.3 + 0.7 * vFactor);
 	const widthBonus = Math.min(1, spectrumWidth / 0.5);
-	const compositeScore = 0.8 * alphaScore + 0.2 * widthBonus;
+	const compositeScore = 0.75 * modulatedAlpha + 0.25 * widthBonus;
 
 	return {
 		alpha: Math.round(alpha * 1000) / 1000,

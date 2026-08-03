@@ -54,19 +54,36 @@ export function splitSentences(text: string): string[] {
 	let buffer = "";
 
 	const tokens = text.split(/(\s+)/);
-	for (const token of tokens) {
+	for (let i = 0; i < tokens.length; i++) {
+		const token = tokens[i]!;
 		buffer += token;
+		const trimmed = token.trim();
 
-		if (/[.!?]["'\u201D\u2019)]*$/.test(token.trim())) {
-			const word = token.trim().replace(/[.!?]["'\u201D\u2019)]*$/, "").toLowerCase();
+		if (/[.!?]["'\u201D\u2019)]*$/.test(trimmed)) {
+			const word = trimmed.replace(/[.!?]["'\u201D\u2019)]*$/, "").toLowerCase();
 			if (ABBREVIATIONS.has(word) || ABBREVIATIONS.has(word.replace(/\./g, ""))) {
 				continue;
 			}
-			if (/\.\.\.$/.test(token.trim())) {
-				sentences.push(buffer.trim());
-				buffer = "";
+
+			let next = "";
+			for (let j = i + 1; j < tokens.length; j++) {
+				const t = tokens[j]!.trim();
+				if (t.length > 0) {
+					next = t;
+					break;
+				}
+			}
+			const nextStartsLower = /^["'\u201C\u2018(*_]*[a-z]/.test(next);
+
+			// mid-sentence ellipsis: "...his skull... a voice like stone" \u2014 continuation
+			if (/\.\.\.["'\u201D\u2019)]*$/.test(trimmed) && nextStartsLower) {
 				continue;
 			}
+			// dialogue tag: '"Stop!" he said.' \u2014 quote-final punctuation, lowercase tag
+			if (/[!?]["'\u201D\u2019]+$/.test(trimmed) && nextStartsLower) {
+				continue;
+			}
+
 			sentences.push(buffer.trim());
 			buffer = "";
 		}
