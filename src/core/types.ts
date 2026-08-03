@@ -1,3 +1,5 @@
+import type { ChannelFlow } from "./flow";
+
 export enum SentenceType {
 	Fragment = "fragment",
 	Simple = "simple",
@@ -51,30 +53,29 @@ export interface WordLengthResult {
 	buckets: WordLengthBuckets;
 }
 
+export interface LocalFlow {
+	/** Flow score (0–1) for the window of sentences around this paragraph. */
+	score: number;
+	/** Actionable note when local flow is weak (e.g. "5 similar-length sentences in a row"). */
+	hint: string | null;
+}
+
 export interface ParagraphAnalysis {
 	paragraph: Paragraph;
 	structural: StructuralFlowResult;
 	sentenceLength: SentenceLengthResult;
 	wordLength: WordLengthResult;
-}
-
-export interface FlowScore {
-	/** Composite score (0–1). Derived from Hurst exponent and spectrum width. */
-	score: number;
-	/** DFA scaling exponent. 0.5=noise, ~0.75=structured, 1.0=1/f, 1.5=Brownian. */
-	alpha: number;
-	/** R² of the log-log scaling fit. */
-	fitR2: number;
-	/** Multifractal spectrum width. 0=monofractal, higher=richer variation. */
-	spectrumWidth: number;
+	localFlow: LocalFlow;
 }
 
 export interface DocumentFlowScores {
-	structural: FlowScore;
-	sentenceLength: FlowScore;
-	wordLength: FlowScore;
-	/** Mean of the three component scores. */
+	sentenceLength: ChannelFlow;
+	structure: ChannelFlow;
+	wordLength: ChannelFlow;
+	/** Weighted blend of the three channel scores (0–1). */
 	composite: number;
+	/** Reliability of the estimate given sentence count (0–1). Reported, not baked in. */
+	confidence: number;
 }
 
 export interface DocumentAnalysis {

@@ -1,4 +1,4 @@
-import { SentenceType, ParagraphAnalysis, QuillSettings, FlowScore } from "../core/types";
+import { SentenceType, ParagraphAnalysis, QuillSettings } from "../core/types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const BAR_HEIGHT = 14;

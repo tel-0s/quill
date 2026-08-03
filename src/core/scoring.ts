@@ -3,8 +3,9 @@ import {
 	ParagraphAnalysis,
 	DocumentAnalysis,
 	DocumentFlowScores,
-	FlowScore,
+	LocalFlow,
 	QuillSettings,
+	Sentence,
 	SentenceType,
 	StructuralFlowResult,
 	SentenceLengthResult,
@@ -14,7 +15,14 @@ import { classifyAllSentences, computeStructuralFlow } from "./classifiers/sente
 import { analyzeSentenceLength } from "./classifiers/sentenceLength";
 import { analyzeWordLength } from "./classifiers/wordLength";
 import { tokenize } from "./tokenizer";
-import { computeDfa, DfaResult } from "./dfa";
+import {
+	categoricalChannelFlow,
+	compositeFlow,
+	flowConfidence,
+	numericChannelFlow,
+	SENTENCE_LENGTH_ANCHORS,
+	WORD_LENGTH_ANCHORS,
+} from "./flow";
 
 function analyzeParagraph(paragraph: Paragraph, settings: QuillSettings): ParagraphAnalysis {
 	classifyAllSentences(paragraph.sentences);
@@ -30,7 +38,13 @@ function analyzeParagraph(paragraph: Paragraph, settings: QuillSettings): Paragr
 		settings.longWordMin,
 	);
 
-	return { paragraph, structural, sentenceLength, wordLength };
+	return {
+		paragraph,
+		structural,
+		sentenceLength,
+		wordLength,
+		localFlow: { score: 0, hint: null },
+	};
 }
 
 function mergeStructural(analyses: ParagraphAnalysis[]): StructuralFlowResult {
@@ -109,45 +123,81 @@ function mergeWordLength(analyses: ParagraphAnalysis[]): WordLengthResult {
 	};
 }
 
-const COMPLEXITY_MAP: Record<SentenceType, number> = {
-	[SentenceType.Fragment]: 0,
-	[SentenceType.Simple]: 1,
-	[SentenceType.Compound]: 2,
-	[SentenceType.Complex]: 3,
-	[SentenceType.CompoundComplex]: 4,
-};
+function meanWordLength(s: Sentence): number {
+	if (s.words.length === 0) return 0;
+	return s.words.reduce((sum, w) => sum + w.charLength, 0) / s.words.length;
+}
 
-function computeFlowScores(analyses: ParagraphAnalysis[]): DocumentFlowScores {
-	const allSentences = analyses.flatMap((a) => a.paragraph.sentences);
+function scoreSentences(sentences: Sentence[]): DocumentFlowScores {
+	const lengths = sentences.map((s) => s.wordCount);
+	const wordMeans = sentences.map(meanWordLength);
+	const types = sentences.map((s) => s.type);
 
-	const structuralSeries = allSentences.map((s) => COMPLEXITY_MAP[s.type]);
-	const sentLengthSeries = allSentences.map((s) => s.wordCount);
-	const wordLengthSeries = allSentences.map((s) => {
-		if (s.words.length === 0) return 0;
-		return s.words.reduce((sum, w) => sum + w.charLength, 0) / s.words.length;
-	});
-
-	const structDfa = computeDfa(structuralSeries);
-	const sentDfa = computeDfa(sentLengthSeries);
-	const wordDfa = computeDfa(wordLengthSeries);
-
-	const toScore = (dfa: DfaResult): FlowScore => ({
-		score: dfa.score,
-		alpha: dfa.alpha,
-		fitR2: dfa.fitR2,
-		spectrumWidth: dfa.spectrumWidth,
-	});
-
-	const composite = Math.round(
-		((structDfa.score + sentDfa.score + wordDfa.score) / 3) * 1000,
-	) / 1000;
+	const sentenceLength = numericChannelFlow(lengths, SENTENCE_LENGTH_ANCHORS);
+	const wordLength = numericChannelFlow(wordMeans, WORD_LENGTH_ANCHORS);
+	const structure = categoricalChannelFlow(types);
 
 	return {
-		structural: toScore(structDfa),
-		sentenceLength: toScore(sentDfa),
-		wordLength: toScore(wordDfa),
-		composite,
+		sentenceLength,
+		structure,
+		wordLength,
+		composite: compositeFlow(sentenceLength, structure, wordLength),
+		confidence: flowConfidence(sentences.length),
 	};
+}
+
+const LOCAL_WINDOW_PAD = 4;
+const LOCAL_WINDOW_MIN = 8;
+const LOCAL_HINT_THRESHOLD = 0.5;
+
+function localHint(flow: DocumentFlowScores): string | null {
+	if (flow.composite >= LOCAL_HINT_THRESHOLD) return null;
+
+	const { sentenceLength, structure } = flow;
+	if (sentenceLength.longestRun >= 4) {
+		return `${sentenceLength.longestRun} similar-length sentences in a row`;
+	}
+	if (structure.longestRun >= 4 && structure.runType) {
+		return `${structure.longestRun}× ${structure.runType} in a row`;
+	}
+	if (sentenceLength.contrast < 0.35) {
+		return "sentence lengths barely vary here";
+	}
+	if (structure.range < 0.35) {
+		return "little structural variety here";
+	}
+	return null;
+}
+
+/**
+ * Flow for the window of sentences around each paragraph (the paragraph
+ * plus up to LOCAL_WINDOW_PAD neighbors on each side), so monotonous
+ * stretches are localized instead of diluted into the document score.
+ */
+function computeLocalFlows(analyses: ParagraphAnalysis[], allSentences: Sentence[]): void {
+	let cursor = 0;
+	for (const a of analyses) {
+		const count = a.paragraph.sentences.length;
+		let start = cursor - LOCAL_WINDOW_PAD;
+		let end = cursor + count + LOCAL_WINDOW_PAD;
+		cursor += count;
+
+		if (end - start < LOCAL_WINDOW_MIN) {
+			const deficit = LOCAL_WINDOW_MIN - (end - start);
+			start -= Math.ceil(deficit / 2);
+			end += Math.floor(deficit / 2);
+		}
+		start = Math.max(0, start);
+		end = Math.min(allSentences.length, end);
+
+		const window = allSentences.slice(start, end);
+		const flow = scoreSentences(window);
+		const localFlow: LocalFlow = {
+			score: flow.composite,
+			hint: localHint(flow),
+		};
+		a.localFlow = localFlow;
+	}
 }
 
 export function analyzeDocument(markdownText: string, settings: QuillSettings): DocumentAnalysis {
@@ -160,6 +210,9 @@ export function analyzeDocument(markdownText: string, settings: QuillSettings): 
 		0,
 	);
 
+	const allSentences = analyses.flatMap((a) => a.paragraph.sentences);
+	computeLocalFlows(analyses, allSentences);
+
 	return {
 		paragraphs: analyses,
 		totalSentences,
@@ -167,6 +220,6 @@ export function analyzeDocument(markdownText: string, settings: QuillSettings): 
 		overallStructural: mergeStructural(analyses),
 		overallSentenceLength: mergeSentenceLength(analyses, settings.longSentenceThreshold),
 		overallWordLength: mergeWordLength(analyses),
-		flow: computeFlowScores(analyses),
+		flow: scoreSentences(allSentences),
 	};
 }

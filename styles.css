@@ -142,6 +142,37 @@
 	position: relative;
 }
 
+.quill-flow-heading {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+}
+
+.quill-flow-confidence {
+	font-size: 0.85em;
+	font-weight: 400;
+	color: var(--text-faint);
+}
+
+.quill-paragraph-header {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+
+.quill-paragraph-header .quill-paragraph-text {
+	margin-bottom: 0;
+	flex: 1;
+	min-width: 0;
+}
+
+.quill-paragraph-flow {
+	font-size: 0.75em;
+	font-variant-numeric: tabular-nums;
+	flex-shrink: 0;
+}
+
 .quill-empty-state {
 	display: flex;
 	align-items: center;

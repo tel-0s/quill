@@ -3,6 +3,7 @@
 .idea
 node_modules
 main.js
+scripts/*.cjs
 *.map
 data.json
 .DS_Store

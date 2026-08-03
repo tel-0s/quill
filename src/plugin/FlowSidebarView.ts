@@ -1,5 +1,6 @@
 import { ItemView, WorkspaceLeaf, MarkdownView } from "obsidian";
-import { DocumentAnalysis, SentenceType, QuillSettings, DocumentFlowScores } from "../core/types";
+import { DocumentAnalysis, QuillSettings, DocumentFlowScores } from "../core/types";
+import { ChannelFlow } from "../core/flow";
 import { renderStructuralBar, renderSentenceLengthBar, renderWordLengthBar, renderScoreBar } from "./FlowRenderer";
 
 export const QUILL_VIEW_TYPE = "quill-flow-view";
@@ -92,7 +93,12 @@ export class FlowSidebarView extends ItemView {
 		const COMPONENT_COLOR = "#0d9488";
 		const SCORE_BAR_WIDTH = 100;
 
-		section.createDiv({ cls: "quill-flow-heading", text: "Flow" });
+		const heading = section.createDiv({ cls: "quill-flow-heading" });
+		heading.createSpan({ text: "Flow" });
+		heading.createSpan({
+			cls: "quill-flow-confidence",
+			text: `confidence ${Math.round(flow.confidence * 100)}%`,
+		});
 
 		const compositeRow = section.createDiv({ cls: "quill-flow-row quill-flow-composite" });
 		compositeRow.createDiv({ cls: "quill-flow-label", text: "Overall" });
@@ -103,23 +109,27 @@ export class FlowSidebarView extends ItemView {
 			text: flow.composite.toFixed(2),
 		});
 
-		const components: [string, number, number, number, number][] = [
-			["Structure", flow.structural.score, flow.structural.alpha, flow.structural.spectrumWidth, flow.structural.fitR2],
-			["Sent. len", flow.sentenceLength.score, flow.sentenceLength.alpha, flow.sentenceLength.spectrumWidth, flow.sentenceLength.fitR2],
-			["Word len", flow.wordLength.score, flow.wordLength.alpha, flow.wordLength.spectrumWidth, flow.wordLength.fitR2],
+		const components: [string, ChannelFlow, string, string][] = [
+			["Sent. len", flow.sentenceLength, "contrast", "range"],
+			["Structure", flow.structure, "novelty", "variety"],
+			["Word len", flow.wordLength, "contrast", "range"],
 		];
 
-		for (const [label, score, alpha, specWidth, fitR2] of components) {
+		for (const [label, channel, contrastName, rangeName] of components) {
 			const row = section.createDiv({ cls: "quill-flow-row" });
 			row.createDiv({ cls: "quill-flow-label", text: label });
 			const bar = row.createDiv({ cls: "quill-flow-bar" });
-			bar.appendChild(renderScoreBar(score, SCORE_BAR_WIDTH, COMPONENT_COLOR));
-			row.createDiv({ cls: "quill-flow-value", text: score.toFixed(2) });
+			bar.appendChild(renderScoreBar(channel.score, SCORE_BAR_WIDTH, COMPONENT_COLOR));
+			row.createDiv({ cls: "quill-flow-value", text: channel.score.toFixed(2) });
 
-			row.setAttribute(
-				"aria-label",
-				`\u03b1=${alpha} (fit R\u00b2=${fitR2}), spectrum width=${specWidth}`,
-			);
+			const notes = [`${contrastName} ${channel.contrast.toFixed(2)}`, `${rangeName} ${channel.range.toFixed(2)}`];
+			if (channel.monotonyFactor < 1) {
+				notes.push(`run of ${channel.longestRun} \u00d7${channel.monotonyFactor.toFixed(2)}`);
+			}
+			if (channel.periodicityFactor < 1) {
+				notes.push(`pattern \u00d7${channel.periodicityFactor.toFixed(2)}`);
+			}
+			row.setAttribute("aria-label", notes.join(", "));
 			row.addClass("quill-flow-has-tooltip");
 		}
 	}
@@ -152,11 +162,25 @@ export class FlowSidebarView extends ItemView {
 			this.scrollToParagraph(pa.paragraph.offset);
 		});
 
+		const header = row.createDiv({ cls: "quill-paragraph-header" });
 		const preview = pa.paragraph.text.slice(0, 50);
-		row.createDiv({
+		header.createDiv({
 			cls: "quill-paragraph-text",
 			text: preview + (pa.paragraph.text.length > 50 ? "..." : ""),
 		});
+
+		if (pa.paragraph.sentences.length > 0) {
+			const chip = header.createDiv({
+				cls: "quill-paragraph-flow",
+				text: pa.localFlow.score.toFixed(2),
+			});
+			const t = Math.max(0, Math.min(1, pa.localFlow.score));
+			chip.style.color = t < 0.4 ? "#ef4444" : t < 0.6 ? "#f59e0b" : "#14b8a6";
+			if (pa.localFlow.hint) {
+				chip.setAttribute("aria-label", pa.localFlow.hint);
+				chip.addClass("quill-flow-has-tooltip");
+			}
+		}
 
 		this.renderMetricRow(
 			row,
